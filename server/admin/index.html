@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gomoku Online — 管理后台</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f172a; color: #e2e8f0; min-height: 100vh; }
+.login-container { display: flex; justify-content: center; align-items: center; height: 100vh; flex-direction: column; }
+.login-box { background: #1e293b; padding: 40px; border-radius: 12px; box-shadow: 0 4px 24px rgba(0,0,0,0.5); width: 360px; text-align: center; }
+.login-box h1 { font-size: 24px; margin-bottom: 8px; color: #f8fafc; }
+.login-box p { color: #94a3b8; margin-bottom: 24px; font-size: 14px; }
+.login-box input { width: 100%; padding: 12px; border: 1px solid #334155; border-radius: 8px; background: #0f172a; color: #e2e8f0; font-size: 16px; outline: none; }
+.login-box input:focus { border-color: #6366f1; }
+.login-box button { width: 100%; padding: 12px; margin-top: 16px; background: #6366f1; color: white; border: none; border-radius: 8px; font-size: 16px; cursor: pointer; }
+.login-box button:hover { background: #4f46e5; }
+.error-msg { color: #ef4444; margin-top: 12px; font-size: 14px; display: none; }
+
+.dashboard { display: none; padding: 24px; max-width: 1200px; margin: 0 auto; }
+.header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+.header h1 { font-size: 28px; color: #f8fafc; }
+.header button { padding: 8px 20px; background: #ef4444; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; }
+.header button:hover { background: #dc2626; }
+
+.stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
+.stat-card { background: #1e293b; padding: 20px; border-radius: 12px; text-align: center; }
+.stat-card .label { font-size: 12px; color: #64748b; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+.stat-card .value { font-size: 28px; font-weight: 700; color: #f8fafc; }
+.stat-card .sub { font-size: 13px; color: #94a3b8; margin-top: 4px; }
+.stat-card.highlight { border: 2px solid #6366f1; }
+
+.rooms-section { background: #1e293b; border-radius: 12px; padding: 24px; margin-bottom: 24px; }
+.rooms-section h2 { font-size: 20px; margin-bottom: 16px; color: #f8fafc; }
+
+table { width: 100%; border-collapse: collapse; }
+th { text-align: left; padding: 12px 8px; font-size: 12px; color: #64748b; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid #334155; }
+td { padding: 12px 8px; border-bottom: 1px solid #1a2332; font-size: 14px; }
+tr:hover { background: #1a2332; }
+.status-badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+.status-waiting { background: #1e3a2f; color: #4ade80; }
+.status-inProgress { background: #3b1e3a; color: #f472b6; }
+.action-btn { padding: 4px 12px; font-size: 12px; border: none; border-radius: 4px; cursor: pointer; margin-right: 4px; }
+.btn-view { background: #334155; color: #e2e8f0; }
+.btn-view:hover { background: #475569; }
+.btn-close { background: #7f1d1d; color: #fca5a5; }
+.btn-close:hover { background: #991b1b; }
+.no-rooms { text-align: center; color: #64748b; padding: 40px; }
+
+.board-preview { background: #1e293b; border-radius: 12px; padding: 24px; display: none; }
+.board-preview h2 { font-size: 20px; margin-bottom: 16px; color: #f8fafc; }
+.board-preview .board-meta { font-size: 13px; color: #94a3b8; margin-bottom: 16px; }
+canvas { display: block; background: #dcb35c; border-radius: 4px; }
+.board-preview .btn-close-board { margin-top: 12px; padding: 6px 16px; background: #334155; color: #e2e8f0; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; }
+
+.footer { text-align: center; padding: 24px; color: #475569; font-size: 12px; }
+.connected-dot { display: inline-block; width: 8px; height: 8px; background: #4ade80; border-radius: 50%; margin-right: 6px; }
+.connected-dot.disconnected { background: #ef4444; }
+</style>
+</head>
+<body>
+
+<!-- 登录页面 -->
+<div class="login-container" id="loginPage">
+  <div class="login-box">
+    <h1>🀄 Gomoku 管理后台</h1>
+    <p>请输入管理员密码</p>
+    <input type="password" id="tokenInput" placeholder="管理员密码" onkeydown="if(event.key==='Enter')login()">
+    <button onclick="login()">登 录</button>
+    <p class="error-msg" id="loginError">密码错误</p>
+  </div>
+</div>
+
+<!-- 管理面板 -->
+<div class="dashboard" id="dashboard">
+  <div class="header">
+    <h1>🀄 Gomoku Online — 管理后台 <span id="connectionDot"></span></h1>
+    <button onclick="logout()">退出登录</button>
+  </div>
+
+  <div class="stats-grid">
+    <div class="stat-card"><div class="label">运行时间</div><div class="value" id="uptime">--</div></div>
+    <div class="stat-card"><div class="label">内存占用</div><div class="value" id="memory">--</div><div class="sub" id="heapInfo"></div></div>
+    <div class="stat-card"><div class="label">活跃连接</div><div class="value" id="connections">--</div></div>
+    <div class="stat-card"><div class="label">总房间数</div><div class="value" id="totalRooms">--</div></div>
+    <div class="stat-card"><div class="label">等待中</div><div class="value" id="waitingRooms" style="color:#4ade80">--</div></div>
+    <div class="stat-card highlight"><div class="label">对局中</div><div class="value" id="inProgress" style="color:#f472b6">--</div></div>
+    <div class="stat-card"><div class="label">在线玩家</div><div class="value" id="playersOnline">--</div></div>
+  </div>
+
+  <div class="rooms-section">
+    <h2>📋 活跃房间 <span style="font-size:13px;color:#64748b;font-weight:normal;" id="autoRefreshBadge">(自动刷新中)</span></h2>
+    <table id="roomsTable"><tbody><tr><td class="no-rooms">暂无活跃房间</td></tr></tbody></table>
+  </div>
+
+  <div class="board-preview" id="boardPreview">
+    <h2>🔍 棋盘预览 — <span id="boardRoomCode"></span></h2>
+    <p class="board-meta" id="boardMeta"></p>
+    <canvas id="boardCanvas" width="285" height="285"></canvas>
+    <br>
+    <button class="btn-close-board" onclick="closeBoardPreview()">关闭预览</button>
+  </div>
+
+  <div class="footer">Gomoku Online Admin Panel • 实时更新</div>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+let adminSocket = null;
+let selectedRoom = null;
+
+// ====== 登录 ======
+async function login() {
+  const token = document.getElementById('tokenInput').value;
+  const errEl = document.getElementById('loginError');
+  errEl.style.display = 'none';
+
+  try {
+    const resp = await fetch('/api/admin/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token }),
+      credentials: 'include'
+    });
+    const data = await resp.json();
+
+    if (data.success) {
+      document.getElementById('loginPage').style.display = 'none';
+      document.getElementById('dashboard').style.display = 'block';
+      connectSocket(token);
+      loadInitialData();
+    } else {
+      errEl.textContent = data.message || '密码错误';
+      errEl.style.display = 'block';
+    }
+  } catch (e) {
+    errEl.textContent = '无法连接服务器';
+    errEl.style.display = 'block';
+  }
+}
+
+// ====== 登出 ======
+async function logout() {
+  if (adminSocket) adminSocket.disconnect();
+  await fetch('/api/admin/logout', { method: 'POST', credentials: 'include' });
+  document.getElementById('dashboard').style.display = 'none';
+  document.getElementById('loginPage').style.display = 'flex';
+  document.getElementById('tokenInput').value = '';
+}
+
+// ====== Socket.IO 连接 ======
+function connectSocket(token) {
+  adminSocket = io('/admin', {
+    auth: { token },
+    transports: ['websocket', 'polling']
+  });
+
+  adminSocket.on('connect', () => {
+    updateConnectionDot(true);
+    console.log('Admin socket connected');
+  });
+
+  adminSocket.on('disconnect', () => {
+    updateConnectionDot(false);
+  });
+
+  adminSocket.on('connect_error', (err) => {
+    console.error('Admin socket error:', err.message);
+    updateConnectionDot(false);
+  });
+
+  adminSocket.on('admin:stats', (data) => {
+    document.getElementById('uptime').textContent = data.uptime;
+    document.getElementById('memory').textContent = data.memory + ' MB';
+    document.getElementById('heapInfo').textContent = 'Heap: ' + data.heapUsed + ' MB';
+    document.getElementById('connections').textContent = data.connections;
+    document.getElementById('totalRooms').textContent = data.rooms.total;
+    document.getElementById('waitingRooms').textContent = data.rooms.waiting;
+    document.getElementById('inProgress').textContent = data.rooms.inProgress;
+    document.getElementById('playersOnline').textContent = data.playersOnline;
+  });
+
+  adminSocket.on('admin:roomsList', (data) => {
+    renderRoomsTable(data.rooms);
+  });
+
+  adminSocket.on('admin:roomClosed', (data) => {
+    if (selectedRoom === data.roomCode) {
+      closeBoardPreview();
+    }
+  });
+}
+
+function updateConnectionDot(connected) {
+  const dot = document.getElementById('connectionDot');
+  dot.innerHTML = connected
+    ? '<span class="connected-dot"></span>'
+    : '<span class="connected-dot disconnected"></span>';
+}
+
+// ====== 加载初始数据 ======
+async function loadInitialData() {
+  try {
+    const resp = await fetch('/api/admin/status', { credentials: 'include' });
+    const data = await resp.json();
+    document.getElementById('uptime').textContent = data.uptimeFormatted;
+    document.getElementById('memory').textContent = data.memory.rss + ' MB';
+    document.getElementById('heapInfo').textContent = 'Heap: ' + data.memory.heapUsed + ' MB';
+    document.getElementById('connections').textContent = data.connections;
+    document.getElementById('totalRooms').textContent = data.rooms.total;
+    document.getElementById('waitingRooms').textContent = data.rooms.waiting;
+    document.getElementById('inProgress').textContent = data.rooms.inProgress;
+    document.getElementById('playersOnline').textContent = data.playersOnline;
+  } catch (e) {
+    console.error('Failed to load status:', e);
+  }
+}
+
+// ====== 渲染房间列表 ======
+function renderRoomsTable(rooms) {
+  const tbody = document.querySelector('#roomsTable tbody');
+  if (!rooms || rooms.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" class="no-rooms">暂无活跃房间</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = rooms.map(r => `
+    <tr>
+      <td><strong>${esc(r.roomCode)}</strong></td>
+      <td>${r.player1 ? '⚫ ' + esc(r.player1) : '<span style="color:#64748b">—</span>'}</td>
+      <td>${r.player2 ? '⚪ ' + esc(r.player2) : '<span style="color:#64748b">—</span>'}</td>
+      <td><span class="status-badge ${r.status === 'inProgress' ? 'status-inProgress' : 'status-waiting'}">${r.status === 'inProgress' ? '对局中' : '等待中'}</span></td>
+      <td>${r.status === 'inProgress' ? r.currentTurn : '—'}</td>
+      <td>
+        <button class="action-btn btn-view" onclick="viewBoard('${esc(r.roomCode)}')">查看棋盘</button>
+        <button class="action-btn btn-close" onclick="closeRoom('${esc(r.roomCode)}')">关闭</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+// ====== 查看棋盘 ======
+async function viewBoard(roomCode) {
+  selectedRoom = roomCode;
+  document.getElementById('boardRoomCode').textContent = roomCode;
+  document.getElementById('boardPreview').style.display = 'block';
+
+  adminSocket.emit('admin:getBoard', { roomCode }, (data) => {
+    if (data.error) {
+      document.getElementById('boardMeta').textContent = data.error;
+      return;
+    }
+
+    const p1 = data.players.find(p => p.color === 1);
+    const p2 = data.players.find(p => p.color === 2);
+    const turnText = data.currentColor === 1 ? '⚫ 黑棋' : '⚪ 白棋';
+    document.getElementById('boardMeta').innerHTML = `
+      ${p1 ? '⚫ ' + esc(p1.name) : '—'} vs ${p2 ? '⚪ ' + esc(p2.name) : '—'} |
+      状态: ${data.gameStarted ? '对局中' : '等待中'} |
+      当前回合: ${turnText}
+    `;
+
+    drawBoard(data.board);
+  });
+}
+
+// ====== 绘制棋盘 ======
+function drawBoard(board) {
+  const canvas = document.getElementById('boardCanvas');
+  const ctx = canvas.getContext('2d');
+  const cellSize = 15;
+  const padding = 10;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // 背景
+  ctx.fillStyle = '#dcb35c';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // 网格线
+  ctx.strokeStyle = '#8b6914';
+  ctx.lineWidth = 0.5;
+  for (let i = 0; i < 19; i++) {
+    ctx.beginPath();
+    ctx.moveTo(padding, padding + i * cellSize);
+    ctx.lineTo(padding + 18 * cellSize, padding + i * cellSize);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(padding + i * cellSize, padding);
+    ctx.lineTo(padding + i * cellSize, padding + 18 * cellSize);
+    ctx.stroke();
+  }
+
+  // 棋子
+  for (let i = 0; i < 19; i++) {
+    for (let j = 0; j < 19; j++) {
+      if (board[i][j] === 0) continue;
+      const x = padding + j * cellSize;
+      const y = padding + i * cellSize;
+      const r = cellSize * 0.42;
+
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fillStyle = board[i][j] === 1 ? '#1a1a1a' : '#f0f0f0';
+      ctx.fill();
+      ctx.strokeStyle = board[i][j] === 1 ? '#000' : '#999';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+  }
+}
+
+function closeBoardPreview() {
+  document.getElementById('boardPreview').style.display = 'none';
+  selectedRoom = null;
+}
+
+// ====== 关闭房间 ======
+function closeRoom(roomCode) {
+  if (!confirm(`确定要关闭房间 ${roomCode} 吗？房间内的玩家将被踢出。`)) return;
+
+  adminSocket.emit('admin:closeRoom', { roomCode });
+}
+
+// HTML 转义
+function esc(str) {
+  if (!str) return '';
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+</script>
+</body>
+</html>
