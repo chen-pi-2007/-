@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>五子棋 · GOMOKU</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@500;600;700;900&family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#221913;font-family:'Noto Sans SC',sans-serif;}
+@keyframes stoneDrop{0%{transform:scale(.2);opacity:0}60%{transform:scale(1.09)}100%{transform:scale(1);opacity:1}}
+@keyframes overlayIn{from{opacity:0;transform:scale(.92)}to{opacity:1;transform:scale(1)}}
+@keyframes pulseDot{0%,100%{opacity:.35;transform:scale(.75)}50%{opacity:1;transform:scale(1.15)}}
+@keyframes winPulse{0%,100%{opacity:.9}50%{opacity:.5}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+</style>
+</helmet>
+
+<div style="{{ wrapStyle }}">
+  <div style="{{ outerLayout }}">
+
+    <!-- BOARD COLUMN -->
+    <div style="position:relative;flex:none;">
+      <div style="{{ frameStyle }}">
+        <div onClick="{{ onBoardClick }}" onMouseMove="{{ onBoardMove }}" onMouseLeave="{{ onBoardLeave }}" onTouchStart="{{ onBoardTouch }}" style="{{ boardStyle }}">
+          <div style="{{ grainStyle }}"></div>
+          <div style="{{ gridStyle }}"></div>
+          <sc-for list="{{ stars }}" as="st" hint-placeholder-count="0"><div style="{{ st }}"></div></sc-for>
+          <sc-if value="{{ winLineStyle }}" hint-placeholder-val="{{ false }}"><div style="{{ winLineStyle }}"></div></sc-if>
+          <sc-if value="{{ ghostStyle }}" hint-placeholder-val="{{ false }}"><div style="{{ ghostStyle }}"></div></sc-if>
+          <sc-for list="{{ stones }}" as="s" hint-placeholder-count="0">
+            <div style="{{ s.style }}">
+              <sc-if value="{{ s.isLast }}" hint-placeholder-val="{{ false }}"><div style="{{ s.markerStyle }}"></div></sc-if>
+            </div>
+          </sc-for>
+          <sc-if value="{{ showOverlay }}" hint-placeholder-val="{{ false }}">
+            <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(28,18,10,.46);backdrop-filter:blur(3px);z-index:20;">
+              <div style="background:linear-gradient(170deg,#f8f1e4,#ece0cd);padding:24px 28px;border-radius:18px;box-shadow:0 24px 60px rgba(0,0,0,.5);text-align:center;animation:overlayIn .3s cubic-bezier(.2,.7,.3,1.3);">
+                <div style="font:700 11px 'Noto Sans SC';letter-spacing:.34em;color:#b08a5e;">{{ resultKicker }}</div>
+                <div style="font:900 32px 'Noto Serif SC';color:#312515;margin-top:10px;line-height:1;">{{ resultText }}</div>
+                <div style="font:400 13px 'Noto Sans SC';color:#8a7766;margin-top:8px;">{{ resultSub }}</div>
+                <div onClick="{{ onRestart }}" style="{{ accentBtnLg }}">再来一局</div>
+              </div>
+            </div>
+          </sc-if>
+        </div>
+      </div>
+
+      <!-- LOBBY OVERLAY -->
+      <sc-if value="{{ lobbyShow }}" hint-placeholder-val="{{ false }}">
+        <div style="position:absolute;inset:0;z-index:30;display:flex;align-items:center;justify-content:center;border-radius:14px;background:rgba(15,10,7,.82);backdrop-filter:blur(8px);animation:fadeIn .2s ease;">
+          <div style="{{ lobbyCardStyle }}">
+
+            <sc-if value="{{ lobbyIsIdle }}" hint-placeholder-val="{{ false }}">
+              <div style="font:900 24px 'Noto Serif SC';color:#2d2216;">联机对战</div>
+              <div style="font:400 13px 'Noto Sans SC';color:#9b8a76;margin-top:8px;line-height:1.6;">两个客户端实时对弈<br>黑方先手，白方后手</div>
+              <div style="display:flex;gap:12px;margin-top:24px;">
+                <div onClick="{{ onCreateRoom }}" style="{{ lobbyBtnPrimary }}">
+                  <div>创建房间</div>
+                  <div style="font:400 11px 'Noto Sans SC';opacity:.8;margin-top:4px;">你执黑 · 先手</div>
+                </div>
+                <div onClick="{{ goToJoining }}" style="{{ lobbyBtnSecondary }}">
+                  <div>加入房间</div>
+                  <div style="font:400 11px 'Noto Sans SC';opacity:.75;margin-top:4px;">你执白 · 后手</div>
+                </div>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ lobbyIsWaiting }}" hint-placeholder-val="{{ false }}">
+              <div style="font:900 22px 'Noto Serif SC';color:#2d2216;">等待对方加入</div>
+              <div style="font:400 13px 'Noto Sans SC';color:#9b8a76;margin-top:8px;">将以下对局码发送给对方</div>
+              <div style="margin-top:16px;background:#f0e8d4;border-radius:12px;padding:12px 14px;display:flex;align-items:center;gap:10px;text-align:left;">
+                <div style="flex:1;font:700 12px 'JetBrains Mono';color:#2d2216;word-break:break-all;line-height:1.5;">{{ roomCode }}</div>
+                <div onClick="{{ onCopyCode }}" style="{{ lobbyBtnCopy }}">复制</div>
+              </div>
+              <div style="display:flex;align-items:center;justify-content:center;gap:10px;margin-top:16px;">
+                <div style="{{ lobbySpinnerStyle }}"></div>
+                <div style="font:500 13px 'Noto Sans SC';color:#9b8a76;">等待对方连接…</div>
+              </div>
+              <div onClick="{{ goToIdle }}" style="margin-top:16px;font:500 13px 'Noto Sans SC';color:#b08a5e;cursor:pointer;text-decoration:underline;text-underline-offset:3px;">返回</div>
+            </sc-if>
+
+            <sc-if value="{{ lobbyIsJoining }}" hint-placeholder-val="{{ false }}">
+              <div style="font:900 22px 'Noto Serif SC';color:#2d2216;">加入对局</div>
+              <div style="font:400 13px 'Noto Sans SC';color:#9b8a76;margin-top:8px;">输入对方分享的对局码</div>
+              <input type="text" value="{{ joinCode }}" onChange="{{ onJoinCodeChange }}" placeholder="粘贴对局码…" style="display:block;width:100%;margin-top:16px;padding:12px 14px;border-radius:11px;border:1.5px solid #dac9ad;background:#fbf6ec;font:500 13px 'JetBrains Mono';color:#2d2216;outline:none;">
+              <div style="display:flex;gap:10px;margin-top:12px;">
+                <div onClick="{{ goToIdle }}" style="{{ lobbyBtnSecondary }}">返回</div>
+                <div onClick="{{ onJoinRoom }}" style="{{ lobbyBtnPrimary }}">连接</div>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ lobbyIsConnecting }}" hint-placeholder-val="{{ false }}">
+              <div style="font:900 22px 'Noto Serif SC';color:#2d2216;">正在连接…</div>
+              <div style="display:flex;align-items:center;justify-content:center;margin-top:20px;"><div style="{{ lobbySpinnerStyle }}"></div></div>
+            </sc-if>
+
+            <sc-if value="{{ lobbyIsDisconnected }}" hint-placeholder-val="{{ false }}">
+              <div style="font:900 22px 'Noto Serif SC';color:#2d2216;">连接已断开</div>
+              <div style="font:400 13px 'Noto Sans SC';color:#9b8a76;margin-top:8px;">对方可能已离开对局</div>
+              <div style="display:flex;gap:10px;margin-top:20px;">
+                <div onClick="{{ goToIdle }}" style="{{ lobbyBtnSecondary }}">重新联机</div>
+                <div onClick="{{ setPve }}" style="{{ lobbyBtnPrimary }}">人机对战</div>
+              </div>
+            </sc-if>
+
+          </div>
+        </div>
+      </sc-if>
+    </div>
+
+    <!-- PANEL -->
+    <div style="{{ panelStyle }}">
+
+      <div>
+        <div style="{{ titleStyle }}">五子棋</div>
+        <div style="font:700 11px 'Noto Sans SC';color:#b58c5a;letter-spacing:.36em;margin-top:4px;">GOMOKU · 19 路</div>
+      </div>
+
+      <!-- ONLINE STATUS -->
+      <sc-if value="{{ isPvp }}" hint-placeholder-val="{{ false }}">
+        <div style="background:#fbf6ec;border:1px solid #e7d9c0;border-radius:12px;padding:11px 14px;display:flex;align-items:center;gap:10px;">
+          <div style="{{ onlineStatusDot }}"></div>
+          <div style="flex:1;min-width:0;">
+            <div style="font:700 13px 'Noto Sans SC';color:#2d2216;">{{ onlineStatusText }}</div>
+            <div style="font:400 11px 'Noto Sans SC';color:#9b8a76;margin-top:1px;">{{ myColorLabel }}</div>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- TURN CARD -->
+      <div style="background:#fbf6ec;border:1px solid #e7d9c0;border-radius:13px;padding:13px 15px;display:flex;align-items:center;gap:12px;">
+        <div style="position:relative;width:34px;height:34px;flex:none;">
+          <div style="{{ turnStoneStyle }}"></div>
+          <sc-if value="{{ thinking }}" hint-placeholder-val="{{ false }}"><div style="{{ thinkDot }}"></div></sc-if>
+        </div>
+        <div style="flex:1;min-width:0;">
+          <div style="font:700 15px 'Noto Serif SC';color:#2d2216;">{{ turnTitle }}</div>
+          <div style="font:400 12px 'Noto Sans SC';color:#9b8a76;margin-top:1px;">{{ turnSub }}</div>
+        </div>
+      </div>
+
+      <!-- STATS -->
+      <div style="display:flex;gap:8px;">
+        <div style="flex:1;background:#fbf6ec;border:1px solid #ecdfc8;border-radius:11px;padding:10px 8px;text-align:center;">
+          <div style="font:700 20px 'JetBrains Mono';color:#2d2216;">{{ moveCount }}</div>
+          <div style="font:500 10px 'Noto Sans SC';color:#a8967f;letter-spacing:.1em;margin-top:2px;">步数</div>
+        </div>
+        <div style="flex:1;background:#fbf6ec;border:1px solid #ecdfc8;border-radius:11px;padding:10px 8px;text-align:center;">
+          <div style="display:flex;align-items:center;justify-content:center;gap:5px;"><div style="width:10px;height:10px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#6b6c72,#0a0a0c);flex:none;"></div><div style="font:700 14px 'JetBrains Mono';color:#2d2216;">{{ blackTime }}</div></div>
+          <div style="font:500 10px 'Noto Sans SC';color:#a8967f;margin-top:2px;">{{ blackTag }}</div>
+        </div>
+        <div style="flex:1;background:#fbf6ec;border:1px solid #ecdfc8;border-radius:11px;padding:10px 8px;text-align:center;">
+          <div style="display:flex;align-items:center;justify-content:center;gap:5px;"><div style="width:10px;height:10px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff,#cdc4b3);box-shadow:inset 0 0 0 1px rgba(0,0,0,.12);flex:none;"></div><div style="font:700 14px 'JetBrains Mono';color:#2d2216;">{{ whiteTime }}</div></div>
+          <div style="font:500 10px 'Noto Sans SC';color:#a8967f;margin-top:2px;">{{ whiteTag }}</div>
+        </div>
+      </div>
+
+      <!-- MODE -->
+      <div>
+        <div style="font:700 10px 'Noto Sans SC';color:#b09063;letter-spacing:.22em;margin-bottom:6px;">对战模式</div>
+        <div style="display:flex;gap:5px;background:#e4d8c2;border-radius:10px;padding:4px;">
+          <div onClick="{{ setPvp }}" style="{{ segPvp }}">联机对战</div>
+          <div onClick="{{ setPve }}" style="{{ segPve }}">人机对战</div>
+        </div>
+      </div>
+
+      <!-- PVE OPTIONS -->
+      <sc-if value="{{ pveShow }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex;flex-direction:column;gap:12px;">
+          <div>
+            <div style="font:700 10px 'Noto Sans SC';color:#b09063;letter-spacing:.22em;margin-bottom:6px;">先手执黑</div>
+            <div style="display:flex;gap:5px;background:#e4d8c2;border-radius:10px;padding:4px;">
+              <div onClick="{{ firstYou }}" style="{{ segFirstYou }}">你先手</div>
+              <div onClick="{{ firstAi }}" style="{{ segFirstAi }}">AI 先手</div>
+            </div>
+          </div>
+          <div>
+            <div style="font:700 10px 'Noto Sans SC';color:#b09063;letter-spacing:.22em;margin-bottom:6px;">AI 难度</div>
+            <div style="display:flex;gap:5px;background:#e4d8c2;border-radius:10px;padding:4px;">
+              <div onClick="{{ diffEasy }}" style="{{ segEasy }}">简单</div>
+              <div onClick="{{ diffNormal }}" style="{{ segNormal }}">普通</div>
+              <div onClick="{{ diffHard }}" style="{{ segHard }}">困难</div>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- UNDO REQUEST DIALOG -->
+      <sc-if value="{{ undoPending }}" hint-placeholder-val="{{ false }}">
+        <div style="background:#fff8ee;border:1.5px solid #e9c87a;border-radius:13px;padding:14px;text-align:center;animation:fadeIn .2s ease;">
+          <div style="font:700 14px 'Noto Serif SC';color:#2d2216;">对方请求悔棋</div>
+          <div style="font:400 12px 'Noto Sans SC';color:#9b8a76;margin-top:4px;">取消上一步落子，是否同意？</div>
+          <div style="display:flex;gap:10px;margin-top:12px;">
+            <div onClick="{{ onUndoReject }}" style="flex:1;text-align:center;padding:10px 0;border-radius:9px;background:#f0e8d4;border:1px solid #dac9ad;color:#5a4a38;font:700 13px 'Noto Sans SC';cursor:pointer;">拒绝</div>
+            <div onClick="{{ onUndoAccept }}" style="{{ accentBtnSm }}">同意</div>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- NORMAL BUTTONS -->
+      <sc-if value="{{ showNormalBtns }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex;gap:10px;">
+          <div onClick="{{ undo }}" style="{{ undoStyle }}">{{ undoText }}</div>
+          <div onClick="{{ onRestart }}" style="{{ accentBtn }}">⟲ {{ restartLabel }}</div>
+        </div>
+      </sc-if>
+
+      <!-- NOTIFY TOAST -->
+      <sc-if value="{{ undoNotify }}" hint-placeholder-val="{{ false }}">
+        <div style="{{ undoNotifyStyle }}">{{ undoNotify }}</div>
+      </sc-if>
+
+      <!-- SOUND -->
+      <div onClick="{{ toggleSound }}" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;padding:2px;">
+        <span style="font:500 13px 'Noto Sans SC';color:#7a6a58;">落子音效</span>
+        <div style="{{ soundTrack }}"><div style="{{ soundKnob }}"></div></div>
+      </div>
+
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1060,&quot;height&quot;:740},&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;经典木纹&quot;,&quot;青瓷碧玉&quot;,&quot;玄夜墨金&quot;,&quot;樱绯霞粉&quot;,&quot;极简灰岩&quot;],&quot;default&quot;:&quot;经典木纹&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;风格&quot;},&quot;stoneFinish&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;莹润&quot;,&quot;哑光&quot;],&quot;default&quot;:&quot;莹润&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;风格&quot;},&quot;showLastMarker&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;风格&quot;}}">
+class Component extends DCLogic {
+  // 响应式棋盘尺寸
+  get BOARD(){
+    if(typeof window==='undefined') return 640;
+    const vw = window.innerWidth;
+    if(vw < 420) return vw - 24;
+    if(vw < 720) return Math.min(vw - 32, 500);
+    return 640;
+  }
+  get PAD(){ return this.BOARD < 480 ? 16 : 26; }
+  get GAP(){ return (this.BOARD - this.PAD*2)/18; }
+  get STONE(){ return this.GAP*0.92; }
+  cx(i){ return this.PAD + i*this.GAP; }
+  get isMobile(){ return typeof window!=='undefined' && window.innerWidth < 720; }
+
+  state = {
+    board: Array.from({length:19},()=>Array(19).fill(0)),
+    current:1, moves:[], winner:0, winCells:[],
+    mode:'pve', aiColor:2, difficulty:'normal', sound:true,
+    hover:null, thinking:false, started:false, times:{1:0,2:0}, showOverlay:false,
+    onlineState:'idle', roomCode:'', joinCode:'', myColor:1,
+    undoPending:false, undoSent:false, undoNotify:null, peerJsReady:false,
+  };
+
+  componentDidMount(){
+    this.timer = setInterval(()=>{
+      if(!this.state.winner && this.state.started)
+        this.setState(s=>({times:{...s.times,[s.current]:s.times[s.current]+1}}));
+    }, 1000);
+    this._onResize = () => this.forceUpdate();
+    window.addEventListener('resize', this._onResize);
+    this.checkPeerJS();
+  }
+  componentWillUnmount(){
+    clearInterval(this.timer);
+    clearTimeout(this.peerJsCheck);
+    window.removeEventListener('resize', this._onResize);
+    this.cleanupPeer();
+  }
+
+  // ===== PEERJS =====
+  checkPeerJS(){
+    if(window.Peer){ this.setState({peerJsReady:true}); }
+    else { this.peerJsCheck = setTimeout(()=>this.checkPeerJS(), 300); }
+  }
+  cleanupPeer(){
+    if(this.conn){ try{this.conn.close();}catch(e){} this.conn=null; }
+    if(this.peer){ try{this.peer.destroy();}catch(e){} this.peer=null; }
+  }
+  createRoom = () => {
+    if(!this.state.peerJsReady){ this.showNotify('联机组件加载中，请稍候…'); return; }
+    this.cleanupPeer();
+    const peer = new window.Peer();
+    this.peer = peer;
+    peer.on('open', id => this.setState({onlineState:'waiting', roomCode:id, myColor:1}));
+    peer.on('connection', conn => { this.setState({onlineState:'connecting'}); this.setupConn(conn); });
+    peer.on('error', () => { this.setState({onlineState:'idle'}); this.showNotify('连接出错，请重试'); });
+  };
+  joinRoom = () => {
+    const code = this.state.joinCode.trim();
+    if(!this.state.peerJsReady){ this.showNotify('联机组件加载中，请稍候…'); return; }
+    if(!code){ this.showNotify('请输入对局码'); return; }
+    this.cleanupPeer();
+    const peer = new window.Peer();
+    this.peer = peer;
+    this.setState({onlineState:'connecting', myColor:2});
+    peer.on('open', ()=>{ const conn=peer.connect(code); this.setupConn(conn); });
+    peer.on('error', ()=>{ this.setState({onlineState:'joining'}); this.showNotify('连接失败，请检查对局码'); });
+  };
+  setupConn(conn){
+    this.conn = conn;
+    conn.on('open', ()=>{
+      this.setState({onlineState:'connected'});
+      if(this.state.myColor===1) conn.send({type:'init', guestColor:2});
+    });
+    conn.on('data', data=>this.handleMsg(data));
+    conn.on('close', ()=>this.setState({onlineState:'disconnected'}));
+    conn.on('error', ()=>this.setState({onlineState:'disconnected'}));
+  }
+  handleMsg(data){
+    switch(data.type){
+      case 'init':    this.setState({myColor:data.guestColor}); break;
+      case 'move':    this.doMove(data.c, data.r, true); break;
+      case 'undo_request': this.setState({undoPending:true}); break;
+      case 'undo_accept':  this.performUndo(); this.setState({undoSent:false}); break;
+      case 'undo_reject':  this.setState({undoSent:false}); this.showNotify('对方拒绝了悔棋'); break;
+      case 'restart':      this.localRestart(); break;
+    }
+  }
+  sendData(data){ if(this.conn) try{this.conn.send(data);}catch(e){} }
+  showNotify(msg){ this.setState({undoNotify:msg}); setTimeout(()=>this.setState({undoNotify:null}),3000); }
+
+  performUndo(){
+    const s=this.state; if(!s.moves.length) return;
+    const moves=[...s.moves], board=s.board.map(r=>r.slice());
+    const last=moves.pop(); board[last.r][last.c]=0;
+    const current=moves.length ? 3-moves[moves.length-1].p : 1;
+    this.setState({board,moves,current,winner:0,winCells:[],showOverlay:false,undoPending:false,undoSent:false});
+  }
+  localRestart(){
+    this.setState({board:Array.from({length:19},()=>Array(19).fill(0)),
+      current:1,moves:[],winner:0,winCells:[],hover:null,thinking:false,
+      started:false,times:{1:0,2:0},showOverlay:false,undoPending:false,undoSent:false,undoNotify:null});
+  }
+  onUndoAccept = () => { this.performUndo(); this.sendData({type:'undo_accept'}); };
+  onUndoReject = () => { this.sendData({type:'undo_reject'}); this.setState({undoPending:false}); };
+  onJoinCodeChange = (e) => this.setState({joinCode:e.target.value});
+  onCopyCode = () => {
+    try{ navigator.clipboard.writeText(this.state.roomCode); }catch(e){}
+    this.showNotify('对局码已复制到剪贴板');
+  };
+  goToIdle = () => { this.cleanupPeer(); this.setState({onlineState:'idle',roomCode:'',joinCode:''}); };
+  goToJoining = () => this.setState({onlineState:'joining',joinCode:''});
+
+  // ===== GAME =====
+  inb(c,r){ return c>=0&&c<19&&r>=0&&r<19; }
+
+  onBoardClick = (e) => {
+    // 忽略 touch 触发的合成 click（由 onBoardTouch 处理）
+    if(e && e.sourceCapabilities && !e.sourceCapabilities.firesTouchEvents===false) {}
+    const s=this.state;
+    if(s.winner||s.thinking) return;
+    if(s.mode==='pve' && s.current===s.aiColor) return;
+    if(s.mode==='pvp'){
+      if(s.onlineState!=='connected'||s.current!==s.myColor||s.undoPending||s.undoSent) return;
+    }
+    const p=this.coordsFromEvent(e); if(!p) return;
+    if(s.board[p.r][p.c]!==0) return;
+    this.doMove(p.c, p.r, false);
+    if(s.mode==='pvp') this.sendData({type:'move',c:p.c,r:p.r});
+  };
+
+  onBoardTouch = (e) => {
+    e.preventDefault();
+    const s=this.state;
+    if(s.winner||s.thinking) return;
+    if(s.mode==='pve' && s.current===s.aiColor) return;
+    if(s.mode==='pvp'){
+      if(s.onlineState!=='connected'||s.current!==s.myColor||s.undoPending||s.undoSent) return;
+    }
+    const touch = e.touches[0]; if(!touch) return;
+    const p = this.coordsFromPoint(e.currentTarget, touch.clientX, touch.clientY);
+    if(!p || s.board[p.r][p.c]!==0) return;
+    this.doMove(p.c, p.r, false);
+    if(s.mode==='pvp') this.sendData({type:'move',c:p.c,r:p.r});
+  };
+
+  onBoardMove = (e) => {
+    if(this.isMobile) return;
+    const s=this.state;
+    const blocked = s.winner ||
+      (s.mode==='pve' && s.current===s.aiColor) ||
+      (s.mode==='pvp' && (s.onlineState!=='connected'||s.current!==s.myColor));
+    if(blocked){ if(s.hover) this.setState({hover:null}); return; }
+    const p=this.coordsFromEvent(e);
+    const nh=(p&&s.board[p.r][p.c]===0)?p:null;
+    const cur=s.hover;
+    if((cur&&nh&&cur.c===nh.c&&cur.r===nh.r)||(!cur&&!nh)) return;
+    this.setState({hover:nh});
+  };
+  onBoardLeave = () => { if(this.state.hover) this.setState({hover:null}); };
+
+  coordsFromEvent(e){
+    return this.coordsFromPoint(e.currentTarget, e.clientX, e.clientY);
+  }
+  coordsFromPoint(el, clientX, clientY){
+    const rect=el.getBoundingClientRect();
+    const c=Math.round((clientX-rect.left-this.PAD)/this.GAP);
+    const r=Math.round((clientY-rect.top-this.PAD)/this.GAP);
+    return this.inb(c,r)?{c,r}:null;
+  }
+
+  doMove(c,r,remote=false){
+    const s=this.state;
+    if(s.board[r][c]!==0||s.winner) return;
+    const board=s.board.map(row=>row.slice()); board[r][c]=s.current;
+    const moves=[...s.moves,{c,r,p:s.current}];
+    const win=this.checkWin(board,c,r,s.current);
+    this.playClack();
+    const draw=!win.win&&moves.length>=361;
+    this.setState({board,moves,hover:null,started:true,thinking:false,
+      winner:win.win?s.current:(draw?3:0), winCells:win.cells,
+      current:win.win?s.current:(3-s.current)},()=>{
+      if(win.win){ this.playWin(); setTimeout(()=>this.setState({showOverlay:true}),1400); return; }
+      if(!remote&&this.state.mode==='pve'&&!this.state.winner&&this.state.current===this.state.aiColor) this.scheduleAI();
+    });
+  }
+
+  checkWin(board,c,r,p){
+    for(const [dx,dy] of [[1,0],[0,1],[1,1],[1,-1]]){
+      const cells=[{c,r}];
+      let i=1; while(this.inb(c+dx*i,r+dy*i)&&board[r+dy*i][c+dx*i]===p){cells.push({c:c+dx*i,r:r+dy*i});i++;}
+      let j=1; while(this.inb(c-dx*j,r-dy*j)&&board[r-dy*j][c-dx*j]===p){cells.push({c:c-dx*j,r:r-dy*j});j++;}
+      if(cells.length>=5) return {win:true,cells};
+    }
+    return {win:false,cells:[]};
+  }
+
+  // ===== AI =====
+  scheduleAI(){
+    if(this.state.winner) return;
+    this.setState({thinking:true});
+    setTimeout(()=>{ if(this.state.winner)return; this.aiMove(); },380);
+  }
+  aiMove(){
+    const {board,aiColor}=this.state;
+    const mv=this.computeBest(board,aiColor);
+    if(mv) this.doMove(mv.c,mv.r); else this.setState({thinking:false});
+  }
+  pat(count,open){
+    if(count>=5) return 1000000; if(open===0) return 0;
+    if(count===4) return open===2?100000:12000;
+    if(count===3) return open===2?6000:600;
+    if(count===2) return open===2?320:64;
+    if(count===1) return open===2?14:3; return 0;
+  }
+  lineScore(board,c,r,dx,dy,p){
+    let count=1,fOpen=false,bOpen=false,i=1,j=1,nc,nr;
+    while(true){ nc=c+dx*i;nr=r+dy*i; if(this.inb(nc,nr)&&board[nr][nc]===p){count++;i++;}else{fOpen=this.inb(nc,nr)&&board[nr][nc]===0;break;} }
+    while(true){ nc=c-dx*j;nr=r-dy*j; if(this.inb(nc,nr)&&board[nr][nc]===p){count++;j++;}else{bOpen=this.inb(nc,nr)&&board[nr][nc]===0;break;} }
+    return this.pat(count,(fOpen?1:0)+(bOpen?1:0));
+  }
+  evalCell(board,c,r,p){ let t=0; for(const [dx,dy] of [[1,0],[0,1],[1,1],[1,-1]]) t+=this.lineScore(board,c,r,dx,dy,p); return t; }
+  cands(board){
+    const seen=new Set(),res=[]; let has=false;
+    for(let r=0;r<19;r++) for(let c=0;c<19;c++) if(board[r][c]){ has=true;
+      for(let dr=-2;dr<=2;dr++) for(let dc=-2;dc<=2;dc++){
+        const nc=c+dc,nr=r+dr;
+        if(this.inb(nc,nr)&&board[nr][nc]===0){const k=nr*19+nc;if(!seen.has(k)){seen.add(k);res.push({c:nc,r:nr});}}
+      }
+    }
+    return has?res:[{c:9,r:9}];
+  }
+  computeBest(board,me){
+    const opp=3-me, cands=this.cands(board);
+    const scored=cands.map(({c,r})=>({c,r,
+      atk:this.evalCell(board,c,r,me), def:this.evalCell(board,c,r,opp),
+      s:this.evalCell(board,c,r,me)+this.evalCell(board,c,r,opp)*0.9-(Math.abs(c-9)+Math.abs(r-9))*0.6}));
+    const win=scored.find(o=>o.atk>=1000000); if(win) return win;
+    const block=scored.filter(o=>o.def>=1000000); if(block.length){block.sort((a,b)=>b.atk-a.atk);return block[0];}
+    scored.sort((a,b)=>b.s-a.s);
+    const diff=this.state.difficulty;
+    if(diff==='easy'){ if(Math.random()<0.4)return scored[0]; return scored[Math.floor(Math.random()*Math.min(scored.length,5))]; }
+    if(diff==='hard'){
+      const top=scored.slice(0,6); let bb=top[0],bv=-Infinity;
+      for(const m of top){
+        const nb=board.map(row=>row.slice()); nb[m.r][m.c]=me;
+        const oc=this.cands(nb); let oppBest=0;
+        for(const o of oc){const v=this.evalCell(nb,o.c,o.r,opp);if(v>oppBest)oppBest=v;}
+        const val=m.atk+m.def*0.9-oppBest*0.8; if(val>bv){bv=val;bb=m;}
+      }
+      return bb;
+    }
+    return scored[0];
+  }
+
+  // ===== CONTROLS =====
+  undo = () => {
+    const s=this.state;
+    if(s.mode==='pvp'){
+      if(s.onlineState!=='connected'||!s.moves.length||s.undoSent||s.undoPending) return;
+      if(s.moves[s.moves.length-1].p!==s.myColor){ this.showNotify('只能请求悔回自己的棋'); return; }
+      this.sendData({type:'undo_request'}); this.setState({undoSent:true}); return;
+    }
+    if(!s.moves.length||s.thinking) return;
+    const moves=[...s.moves], board=s.board.map(row=>row.slice());
+    const last=moves.pop(); board[last.r][last.c]=0;
+    if(s.mode==='pve'&&last.p===s.aiColor&&moves.length){const prev=moves.pop();board[prev.r][prev.c]=0;}
+    const current=moves.length?(3-moves[moves.length-1].p):1;
+    this.setState({board,moves,current,winner:0,winCells:[],hover:null,started:moves.length>0,showOverlay:false});
+  };
+
+  restart = (over) => {
+    const o=(over&&over.constructor===Object)?over:{};
+    const merged={mode:o.mode??this.state.mode,aiColor:o.aiColor??this.state.aiColor,
+      difficulty:o.difficulty??this.state.difficulty,sound:this.state.sound};
+    const switchMode=o.mode&&o.mode!==this.state.mode;
+    if(switchMode&&merged.mode!=='pvp') this.cleanupPeer();
+    const onlineReset=switchMode&&merged.mode==='pvp'?{onlineState:'idle',roomCode:'',joinCode:'',myColor:1}:{};
+    if(!switchMode&&merged.mode==='pvp'&&this.state.onlineState==='connected') this.sendData({type:'restart'});
+    this.setState({board:Array.from({length:19},()=>Array(19).fill(0)),
+      current:1,moves:[],winner:0,winCells:[],hover:null,thinking:false,
+      started:false,times:{1:0,2:0},showOverlay:false,
+      undoPending:false,undoSent:false,undoNotify:null,...merged,...onlineReset},
+      ()=>{ if(this.state.mode==='pve'&&this.state.aiColor===1) this.scheduleAI(); });
+  };
+
+  // ===== AUDIO =====
+  ctx(){ try{return this.ac||(this.ac=new(window.AudioContext||window.webkitAudioContext)());}catch(e){return null;} }
+  playClack(){
+    if(!this.state.sound)return; const ctx=this.ctx(); if(!ctx)return;
+    if(ctx.state==='suspended')ctx.resume();
+    const t=ctx.currentTime;
+    const o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='triangle'; o.frequency.setValueAtTime(520,t); o.frequency.exponentialRampToValueAtTime(150,t+0.07);
+    g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(0.3,t+0.006); g.gain.exponentialRampToValueAtTime(0.0001,t+0.14);
+    o.connect(g).connect(ctx.destination); o.start(t); o.stop(t+0.15);
+    const b=ctx.createBuffer(1,1024,ctx.sampleRate),d=b.getChannelData(0);
+    for(let i=0;i<1024;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/1024,3);
+    const ns=ctx.createBufferSource(); ns.buffer=b; const ng=ctx.createGain(); ng.gain.value=0.14;
+    ns.connect(ng).connect(ctx.destination); ns.start(t);
+  }
+  playWin(){
+    if(!this.state.sound)return; const ctx=this.ctx(); if(!ctx)return;
+    [523,659,784,1047].forEach((f,i)=>{
+      const t=ctx.currentTime+i*0.12,o=ctx.createOscillator(),g=ctx.createGain();
+      o.type='sine'; o.frequency.value=f;
+      g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(0.24,t+0.02); g.gain.exponentialRampToValueAtTime(0.0001,t+0.42);
+      o.connect(g).connect(ctx.destination); o.start(t); o.stop(t+0.44);
+    });
+  }
+
+  // ===== THEMES =====
+  tokens(){
+    const T={
+      '经典木纹':{page:'radial-gradient(circle at 50% -10%,#3a2b1f 0%,#241a13 60%,#1a120c 100%)',frame:'linear-gradient(150deg,#8a6238,#6b4827 55%,#553a20)',frameSh:'rgba(0,0,0,.7)',board:'linear-gradient(160deg,#ecca94,#e0b87d 50%,#d6aa6c)',boardInset:'inset 0 0 50px rgba(120,78,38,.4),inset 0 0 0 1px rgba(90,60,30,.35)',grain:'repeating-linear-gradient(112deg,rgba(150,100,50,.05) 0 7px,rgba(120,80,40,0) 7px 16px)',line:'rgba(74,50,28,.85)',star:'#46321c',accent:'#c4452f',accent2:'#e8765a',accentSh:'rgba(196,69,47,.6)',panel:'linear-gradient(172deg,#f7f0e2,#ebdfcb)',blackRing:''},
+      '青瓷碧玉':{page:'radial-gradient(circle at 50% -10%,#1f3a33,#14241f 60%,#0e1a16 100%)',frame:'linear-gradient(150deg,#3f6b5c,#2c4d42 55%,#21392f)',frameSh:'rgba(0,0,0,.6)',board:'linear-gradient(160deg,#dbe9da,#c7dccb 50%,#b4d0bc)',boardInset:'inset 0 0 50px rgba(70,120,100,.3),inset 0 0 0 1px rgba(50,90,70,.3)',grain:'repeating-linear-gradient(112deg,rgba(60,110,90,.05) 0 7px,rgba(40,90,70,0) 7px 16px)',line:'rgba(46,82,68,.7)',star:'#2e5244',accent:'#1f8a6d',accent2:'#3fb38f',accentSh:'rgba(31,138,109,.5)',panel:'linear-gradient(172deg,#eef4ee,#dde9de)',blackRing:''},
+      '玄夜墨金':{page:'radial-gradient(circle at 50% -10%,#1b1c22,#101116 60%,#0a0a0d 100%)',frame:'linear-gradient(150deg,#3a3d45,#26282f 55%,#1a1b20)',frameSh:'rgba(0,0,0,.75)',board:'linear-gradient(160deg,#2e313a,#262932 50%,#1e2027)',boardInset:'inset 0 0 50px rgba(0,0,0,.5),inset 0 0 0 1px rgba(201,165,95,.18)',grain:'repeating-linear-gradient(112deg,rgba(201,165,95,.04) 0 7px,rgba(201,165,95,0) 7px 16px)',line:'rgba(201,165,95,.45)',star:'#c9a55f',accent:'#d4af5f',accent2:'#f0d089',accentSh:'rgba(212,175,95,.5)',panel:'linear-gradient(172deg,#f2efe6,#e6dfcd)',blackRing:', 0 0 0 1px rgba(255,255,255,.1)'},
+      '樱绯霞粉':{page:'radial-gradient(circle at 50% -10%,#3a2530,#251820 60%,#1a1016 100%)',frame:'linear-gradient(150deg,#9c5d6e,#7d4655 55%,#653a46)',frameSh:'rgba(0,0,0,.6)',board:'linear-gradient(160deg,#f7dee3,#efccd5 50%,#e8bcc8)',boardInset:'inset 0 0 50px rgba(150,80,100,.25),inset 0 0 0 1px rgba(120,60,75,.3)',grain:'repeating-linear-gradient(112deg,rgba(160,90,110,.05) 0 7px,rgba(140,70,90,0) 7px 16px)',line:'rgba(120,60,75,.55)',star:'#8a4458',accent:'#c14a6b',accent2:'#e87a98',accentSh:'rgba(193,74,107,.5)',panel:'linear-gradient(172deg,#f8eef0,#efdde2)',blackRing:''},
+      '极简灰岩':{page:'radial-gradient(circle at 50% -10%,#2a2d33,#1c1e22 60%,#141518 100%)',frame:'linear-gradient(150deg,#5c6470,#454b55 55%,#363b43)',frameSh:'rgba(0,0,0,.6)',board:'linear-gradient(160deg,#e6e9ee,#d8dce3 50%,#cacfd8)',boardInset:'inset 0 0 50px rgba(60,70,85,.18),inset 0 0 0 1px rgba(70,80,95,.3)',grain:'repeating-linear-gradient(112deg,rgba(70,80,95,.04) 0 7px,rgba(70,80,95,0) 7px 16px)',line:'rgba(70,80,95,.55)',star:'#46505f',accent:'#3a6ea5',accent2:'#5a93c9',accentSh:'rgba(58,110,165,.5)',panel:'linear-gradient(172deg,#eef0f3,#dfe3e8)',blackRing:''},
+    };
+    return T[this.props.theme]||T['经典木纹'];
+  }
+
+  // ===== STYLE HELPERS =====
+  stoneStyle(v,c,r,isWin,ghost,T){
+    const S=this.STONE, matte=this.props.stoneFinish==='哑光';
+    const black=matte?'radial-gradient(circle at 42% 38%,#46474c,#25262a 55%,#0c0c0e)':'radial-gradient(circle at 36% 30%,#76777d,#313135 42%,#070709)';
+    const white=matte?'radial-gradient(circle at 42% 38%,#f4f0e8,#e3ddd0 60%,#c4bcab)':'radial-gradient(circle at 36% 30%,#ffffff,#efe9df 52%,#cbc3b3)';
+    let shadow=v===1
+      ?(matte?'0 3px 6px rgba(0,0,0,.5),inset 0 -2px 4px rgba(0,0,0,.4)':'0 3px 6px rgba(0,0,0,.5),inset 0 -2px 5px rgba(0,0,0,.45),inset 0 2px 3px rgba(255,255,255,.22)')
+      :(matte?'0 3px 6px rgba(0,0,0,.3),inset 0 -2px 4px rgba(120,100,70,.2)':'0 3px 6px rgba(0,0,0,.3),inset 0 -2px 5px rgba(120,100,70,.25),inset 0 2px 3px rgba(255,255,255,.9)');
+    if(v===1&&T.blackRing) shadow+=T.blackRing;
+    if(isWin) shadow+=', 0 0 0 3px '+T.accent+', 0 0 18px 3px '+T.accent2;
+    const st={position:'absolute',left:this.cx(c)+'px',top:this.cx(r)+'px',width:S+'px',height:S+'px',
+      marginLeft:(-S/2)+'px',marginTop:(-S/2)+'px',borderRadius:'50%',background:v===1?black:white,
+      boxShadow:shadow,zIndex:ghost?4:5};
+    if(ghost){st.opacity=0.4;st.boxShadow='none';}
+    else st.animation='stoneDrop .22s cubic-bezier(.2,.7,.3,1.25)';
+    return st;
+  }
+  markerStyle(T){
+    const s=this.STONE*0.28;
+    return {position:'absolute',left:'50%',top:'50%',width:s+'px',height:s+'px',marginLeft:(-s/2)+'px',marginTop:(-s/2)+'px',
+      borderRadius:'50%',background:T.accent2,boxShadow:'0 0 0 1.5px rgba(255,255,255,.6)',zIndex:6};
+  }
+  fmt(sec){ const m=Math.floor(sec/60),s=sec%60; return (m<10?'0':'')+m+':'+(s<10?'0':'')+s; }
+  seg(active,accent){
+    return {flex:'1',textAlign:'center',padding:'8px 0',borderRadius:'7px',fontSize:'13px',
+      fontFamily:"'Noto Sans SC',sans-serif",fontWeight:active?'700':'500',cursor:'pointer',
+      transition:'background .15s,color .15s',background:active?accent:'transparent',
+      color:active?'#fff':'#8a7866',letterSpacing:'.02em',userSelect:'none',
+      boxShadow:active?'0 2px 8px -2px rgba(0,0,0,.25)':'none'};
+  }
+
+  renderVals(){
+    const s=this.state, T=this.tokens();
+    const B=this.BOARD, mobile=this.isMobile;
+    const showMarker=this.props.showLastMarker!==false;
+    const winSet=new Set(s.winCells.map(p=>p.r*19+p.c));
+    const last=s.moves[s.moves.length-1];
+
+    // stones
+    const stones=[];
+    for(let r=0;r<19;r++) for(let c=0;c<19;c++){
+      const v=s.board[r][c]; if(!v) continue;
+      const isWin=winSet.has(r*19+c);
+      stones.push({key:c+'-'+r,style:this.stoneStyle(v,c,r,isWin,false,T),
+        isLast:showMarker&&!!last&&last.c===c&&last.r===r,markerStyle:this.markerStyle(T)});
+    }
+
+    // grid + stars
+    const gridW=18*this.GAP+1;
+    const gridStyle={position:'absolute',left:this.PAD+'px',top:this.PAD+'px',width:gridW+'px',height:gridW+'px',
+      backgroundImage:'repeating-linear-gradient(to right,'+T.line+' 0 1px,transparent 1px '+this.GAP+'px),repeating-linear-gradient(to bottom,'+T.line+' 0 1px,transparent 1px '+this.GAP+'px)',
+      backgroundSize:this.GAP+'px '+this.GAP+'px',zIndex:1};
+    const stars=[];
+    for(const c of [3,9,15]) for(const r of [3,9,15]){
+      const sz=(c===9&&r===9)?9:7;
+      stars.push({position:'absolute',left:this.cx(c)+'px',top:this.cx(r)+'px',width:sz+'px',height:sz+'px',
+        marginLeft:(-sz/2)+'px',marginTop:(-sz/2)+'px',borderRadius:'50%',background:T.star,zIndex:2});
+    }
+
+    // ghost（移动端不显示）
+    const humanTurn = s.mode==='pvp'
+      ? s.onlineState==='connected'&&s.current===s.myColor&&!s.undoPending&&!s.undoSent
+      : s.current!==s.aiColor;
+    let ghostStyle=false;
+    if(!mobile&&s.hover&&!s.winner&&humanTurn&&s.board[s.hover.r][s.hover.c]===0)
+      ghostStyle=this.stoneStyle(s.current,s.hover.c,s.hover.r,false,true,T);
+
+    // win line
+    let winLineStyle=false;
+    if(s.winCells.length>=2){
+      let a=s.winCells[0],b=s.winCells[0];
+      for(const p of s.winCells){
+        if(p.r<a.r||(p.r===a.r&&p.c<a.c)) a=p;
+        if(p.r>b.r||(p.r===b.r&&p.c>b.c)) b=p;
+      }
+      const x1=this.cx(a.c),y1=this.cx(a.r),x2=this.cx(b.c),y2=this.cx(b.r);
+      const len=Math.hypot(x2-x1,y2-y1),ang=Math.atan2(y2-y1,x2-x1)*180/Math.PI;
+      winLineStyle={position:'absolute',left:x1+'px',top:y1+'px',width:len+'px',height:'5px',marginTop:'-2.5px',
+        background:'linear-gradient(90deg,'+T.accent+','+T.accent2+')',borderRadius:'3px',
+        transformOrigin:'0 50%',transform:'rotate('+ang+'deg)',boxShadow:'0 0 14px '+T.accentSh,
+        zIndex:3,pointerEvents:'none',animation:'winPulse 1.4s ease-in-out infinite'};
+    }
+
+    // 响应式布局
+    const pad = mobile ? '16px 12px' : '40px 28px';
+    const wrapStyle={minHeight:'100vh',width:'100%',display:'flex',alignItems:'center',justifyContent:'center',padding:pad,background:T.page};
+    const outerLayout={display:'flex',alignItems:'stretch',gap:mobile?'16px':'30px',flexWrap:'wrap',justifyContent:'center'};
+    const framePad = mobile ? '10px' : '20px';
+    const frameStyle={padding:framePad,borderRadius:'14px',background:T.frame,boxShadow:'0 30px 70px -18px '+T.frameSh+',inset 0 1px 0 rgba(255,255,255,.18),inset 0 -2px 4px rgba(0,0,0,.3)'};
+    const boardStyle={position:'relative',width:B+'px',height:B+'px',borderRadius:'5px',cursor:'pointer',background:T.board,boxShadow:T.boardInset,overflow:'hidden',touchAction:'none'};
+    const grainStyle={position:'absolute',inset:'0',background:T.grain,pointerEvents:'none'};
+    const panelW = mobile ? B+'px' : '336px';
+    const panelStyle={width:panelW,background:T.panel,borderRadius:'18px',padding:mobile?'16px':'24px',boxShadow:'0 28px 64px -18px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.7)',display:'flex',flexDirection:'column',gap:mobile?'12px':'18px'};
+    const titleStyle={font:"900 "+(mobile?'24px':'32px')+" 'Noto Serif SC'",color:'#2d2216',letterSpacing:'.05em'};
+
+    const accentBtn={flex:'1',display:'flex',alignItems:'center',justifyContent:'center',gap:'7px',padding:'11px 0',borderRadius:'11px',background:T.accent,color:'#fff',font:"700 14px 'Noto Sans SC'",cursor:'pointer',boxShadow:'0 6px 16px -6px '+T.accentSh};
+    const accentBtnLg={marginTop:'18px',display:'inline-flex',alignItems:'center',gap:'8px',padding:'11px 26px',borderRadius:'10px',background:T.accent,color:'#fff',font:"700 14px 'Noto Sans SC'",letterSpacing:'.05em',cursor:'pointer',boxShadow:'0 6px 16px -4px '+T.accentSh};
+    const accentBtnSm={flex:'1',textAlign:'center',padding:'10px 0',borderRadius:'9px',background:T.accent,color:'#fff',font:"700 13px 'Noto Sans SC'",cursor:'pointer'};
+    const thinkDot={position:'absolute',right:'-3px',bottom:'-3px',width:'11px',height:'11px',borderRadius:'50%',background:T.accent,border:'2px solid #fbf6ec',animation:'pulseDot 1s infinite'};
+
+    const lobbyCardStyle={background:'linear-gradient(170deg,#f8f1e4,#ece0cd)',borderRadius:'20px',padding:mobile?'24px 20px':'36px 40px',boxShadow:'0 24px 64px rgba(0,0,0,.55)',width:mobile?(B-40)+'px':'420px',textAlign:'center'};
+    const lobbyBtnPrimary={flex:'1',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:'14px 10px',borderRadius:'12px',background:T.accent,color:'#fff',font:"700 14px 'Noto Sans SC'",cursor:'pointer',boxShadow:'0 6px 16px -4px '+T.accentSh,lineHeight:'1.4'};
+    const lobbyBtnSecondary={flex:'1',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:'14px 10px',borderRadius:'12px',background:'#ebe0cc',border:'1px solid #d8c9ad',color:'#5a4a38',font:"700 14px 'Noto Sans SC'",cursor:'pointer',lineHeight:'1.4'};
+    const lobbyBtnCopy={padding:'7px 12px',borderRadius:'8px',background:T.accent,color:'#fff',font:"700 11px 'Noto Sans SC'",cursor:'pointer',whiteSpace:'nowrap',flexShrink:'0'};
+    const lobbySpinnerStyle={width:'28px',height:'28px',borderRadius:'50%',border:'3px solid rgba(0,0,0,.1)',borderTopColor:T.accent,animation:'spin .8s linear infinite',flexShrink:'0'};
+
+    // turn card
+    const isPvp=s.mode==='pvp';
+    const pvpConn=isPvp&&s.onlineState==='connected';
+    const turnColor=s.winner?(s.winner===3?0:s.winner):s.current;
+    const turnStoneStyle={position:'absolute',left:'2px',top:'2px',width:'30px',height:'30px',borderRadius:'50%',
+      background:turnColor===2?'radial-gradient(circle at 36% 30%,#fff,#cbc3b3)':(turnColor===1?'radial-gradient(circle at 36% 30%,#76777d,#070709)':'#d8cbb4'),
+      boxShadow:turnColor?'0 2px 5px rgba(0,0,0,.3)':'none'};
+    let turnTitle,turnSub;
+    if(s.winner){ turnTitle=s.winner===3?'平局':(s.winner===1?'黑方胜':'白方胜'); turnSub='点击「再来一局」继续'; }
+    else if(isPvp){
+      if(!pvpConn){ turnTitle='等待连接中'; turnSub='请先建立联机连接'; }
+      else if(s.current===s.myColor){ turnTitle='你的回合'; turnSub=(s.myColor===1?'执黑先手':'执白后手')+' · 点击棋盘落子'; }
+      else { turnTitle=(s.current===1?'黑方':'白方')+'回合'; turnSub='等待对方落子…'; }
+    }
+    else if(s.current===s.aiColor){ turnTitle=s.thinking?'AI 思考中…':'AI 回合'; turnSub='电脑正在落子'; }
+    else { turnTitle='你的回合'; turnSub=(s.aiColor===2?'你执黑':'你执白')+' · 点击棋盘落子'; }
+
+    // result
+    let resultText,resultSub,resultKicker='对 局 结 束';
+    if(s.winner===3){ resultText='平局'; resultSub='棋逢对手，势均力敌'; }
+    else if(isPvp){
+      resultText=(s.winner===1?'黑方':'白方')+'胜';
+      resultSub=s.winner===s.myColor?'恭喜你，你赢了！':'对方胜出，再接再厉';
+    }
+    else {
+      const youWin=s.winner!==s.aiColor;
+      resultText=youWin?'你赢了！':'AI 获胜';
+      resultSub=youWin?'漂亮的对局，恭喜你':'再接再厉，换个策略试试';
+    }
+
+    // online status
+    const statusTexts={idle:'未联机',waiting:'等待对方加入…',joining:'输入对局码中…',connecting:'正在连接…',connected:'已连接',disconnected:'连接已断开'};
+    const onlineStatusDot={width:'8px',height:'8px',borderRadius:'50%',flexShrink:'0',
+      background:pvpConn?'#2a8c5a':s.onlineState==='connecting'?T.accent:'#c5b8a8',
+      boxShadow:pvpConn?'0 0 0 3px rgba(42,140,90,.2)':'none',transition:'background .3s'};
+    const onlineStatusText=statusTexts[s.onlineState]||'未联机';
+    const myColorLabel=pvpConn?(s.myColor===1?'你执黑 · 先手':'你执白 · 后手'):'';
+
+    // lobby
+    const lobbyShow=isPvp&&s.onlineState!=='connected';
+    const lobbyIsIdle=s.onlineState==='idle';
+    const lobbyIsWaiting=s.onlineState==='waiting';
+    const lobbyIsJoining=s.onlineState==='joining';
+    const lobbyIsConnecting=s.onlineState==='connecting';
+    const lobbyIsDisconnected=s.onlineState==='disconnected';
+
+    // undo
+    const pvpCanUndo=pvpConn&&s.moves.length>0&&s.moves[s.moves.length-1].p===s.myColor&&!s.undoSent&&!s.undoPending;
+    const pveCanUndo=s.moves.length>0&&!s.thinking;
+    const undoDisabled=isPvp?!pvpCanUndo:!pveCanUndo;
+    const undoText=isPvp?(s.undoSent?'等待回应…':'请求悔棋'):'↶ 悔棋';
+    const undoStyle={flexShrink:'0',padding:'11px 16px',borderRadius:'11px',background:'#ece1ce',border:'1px solid #dac9ad',color:'#5a4a38',font:"700 14px 'Noto Sans SC'",cursor:'pointer',opacity:undoDisabled?'0.4':'1',pointerEvents:undoDisabled?'none':'auto'};
+    const showNormalBtns=!s.undoPending;
+    const undoNotifyStyle={background:'#fff8ee',border:'1px solid #e9c87a',borderRadius:'9px',padding:'10px 14px',font:"500 13px 'Noto Sans SC'",color:'#6a4a1a',textAlign:'center',animation:'fadeIn .2s ease'};
+    const restartLabel=isPvp?'重新对局':'重新开始';
+
+    // sound
+    const soundTrack={width:'42px',height:'24px',borderRadius:'12px',background:s.sound?T.accent:'#cdbfa8',transition:'background .2s',position:'relative',flexShrink:'0'};
+    const soundKnob={position:'absolute',top:'3px',left:s.sound?'21px':'3px',width:'18px',height:'18px',borderRadius:'50%',background:'#fff',transition:'left .2s',boxShadow:'0 1px 3px rgba(0,0,0,.3)'};
+    const tag=(color)=>s.mode==='pve'?(s.aiColor===color?'AI':'你'):(color===1?'黑方':'白方');
+
+    return {
+      stones,stars,gridStyle,ghostStyle,winLineStyle,winner:s.winner,showOverlay:s.showOverlay,thinking:s.thinking,
+      resultText,resultSub,resultKicker,
+      turnStoneStyle,turnTitle,turnSub,thinkDot,
+      moveCount:s.moves.length,blackTime:this.fmt(s.times[1]),whiteTime:this.fmt(s.times[2]),
+      blackTag:tag(1),whiteTag:tag(2),
+      pveShow:s.mode==='pve',
+      segPvp:this.seg(isPvp,T.accent),segPve:this.seg(s.mode==='pve',T.accent),
+      segFirstYou:this.seg(s.aiColor===2,T.accent),segFirstAi:this.seg(s.aiColor===1,T.accent),
+      segEasy:this.seg(s.difficulty==='easy',T.accent),segNormal:this.seg(s.difficulty==='normal',T.accent),segHard:this.seg(s.difficulty==='hard',T.accent),
+      undoStyle,undoText,showNormalBtns,undoNotify:s.undoNotify,undoNotifyStyle,restartLabel,
+      soundTrack,soundKnob,
+      wrapStyle,outerLayout,frameStyle,boardStyle,grainStyle,panelStyle,titleStyle,
+      accentBtn,accentBtnLg,accentBtnSm,
+      lobbyCardStyle,lobbyBtnPrimary,lobbyBtnSecondary,lobbyBtnCopy,lobbySpinnerStyle,
+      isPvp,onlineStatusDot,onlineStatusText,myColorLabel,
+      lobbyShow,lobbyIsIdle,lobbyIsWaiting,lobbyIsJoining,lobbyIsConnecting,lobbyIsDisconnected,
+      roomCode:s.roomCode,joinCode:s.joinCode,undoPending:s.undoPending,undoSent:s.undoSent,
+      onBoardClick:this.onBoardClick,onBoardMove:this.onBoardMove,onBoardLeave:this.onBoardLeave,
+      onBoardTouch:this.onBoardTouch,
+      undo:this.undo,onRestart:this.restart,
+      setPvp:()=>this.restart({mode:'pvp'}),setPve:()=>this.restart({mode:'pve'}),
+      firstYou:()=>this.restart({aiColor:2}),firstAi:()=>this.restart({aiColor:1}),
+      diffEasy:()=>this.setState({difficulty:'easy'}),diffNormal:()=>this.setState({difficulty:'normal'}),diffHard:()=>this.setState({difficulty:'hard'}),
+      toggleSound:()=>this.setState(st=>({sound:!st.sound})),
+      onCreateRoom:this.createRoom,onJoinRoom:this.joinRoom,onJoinCodeChange:this.onJoinCodeChange,
+      onCopyCode:this.onCopyCode,goToIdle:this.goToIdle,goToJoining:this.goToJoining,
+      onUndoAccept:this.onUndoAccept,onUndoReject:this.onUndoReject,
+    };
+  }
+}
+</script>
+</body>
+</html>
